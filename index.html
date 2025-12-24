@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Prompt DB Server</title>
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #151520;
+            --bg-tertiary: #1e1e2e;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0b0;
+            --text-muted: #707080;
+            --border-color: rgba(255, 255, 255, 0.1);
+            --accent: #6366f1;
+            --accent-hover: #818cf8;
+            --success: #10b981;
+            --error: #ef4444;
+            --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 20px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            background: var(--accent);
+            color: white;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+
+        .search-container {
+            margin-bottom: 30px;
+            display: flex;
+            gap: 12px;
+            align-items: stretch;
+        }
+
+        .model-filter-wrapper {
+            position: relative;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .model-select-with-search {
+            width: 100%;
+            padding: 16px 24px;
+            font-size: 16px;
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23707080' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 16px center;
+            padding-right: 48px;
+        }
+
+        .model-select-with-search:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .search-input {
+            flex: 2;
+            min-width: 0;
+            width: 100%;
+            padding: 16px 24px;
+            font-size: 16px;
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 24px;
+        }
+
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: var(--shadow-md);
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+        }
+
+        .card-image {
+            width: 100%;
+            height: 280px;
+            object-fit: cover;
+            background: var(--bg-tertiary);
+        }
+
+        .card-content {
+            padding: 16px;
+        }
+
+        .card-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .card-prompt {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            max-height: 60px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            padding: 40px;
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            max-width: 1200px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            padding: 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .icon-btn {
+            padding: 8px 12px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .icon-btn:hover {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .modal-body {
+            padding: 24px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        .modal-image {
+            max-width: 100%;
+            border-radius: 12px;
+        }
+
+        .detail-row {
+            margin-bottom: 16px;
+        }
+
+        .detail-label {
+            color: var(--text-muted);
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .detail-value {
+            background: var(--bg-tertiary);
+            padding: 8px 12px;
+            border-radius: 8px;
+            word-break: break-word;
+        }
+
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(10, 10, 15, 0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+            backdrop-filter: blur(4px);
+        }
+
+        .loading.show {
+            display: flex;
+        }
+
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid var(--border-color);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .pagination {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 40px;
+            margin-bottom: 40px;
+        }
+
+        .page-btn {
+            padding: 8px 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+
+        .page-btn:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .page-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--success);
+            color: white;
+            padding: 16px 24px;
+            border-radius: 12px;
+            box-shadow: var(--shadow-md);
+            z-index: 2000;
+            display: none;
+        }
+
+        .toast.error {
+            background: var(--error);
+        }
+
+        .toast.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .scan-modal {
+            padding: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        @media (max-width: 768px) {
+            .modal-body {
+                grid-template-columns: 1fr;
+            }
+            .gallery {
+                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            }
+            .search-container {
+                flex-direction: column;
+            }
+            .model-filter-wrapper {
+                flex: none;
+                width: 100%;
+            }
+            .search-input {
+                flex: none;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎨 Prompt DB Server</h1>
+        <div class="header-actions">
+            <button class="btn btn-secondary" onclick="updateImages()">🔄 Update</button>
+            <button class="btn" onclick="showScanModal()">📁 Scan Folder</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="stats">
+            <span>Total: <strong id="totalCount">0</strong> images</span>
+            <span id="pageInfo"></span>
+        </div>
+
+        <div class="search-container">
+            <div class="model-filter-wrapper">
+                <input type="text" class="model-select-with-search" id="modelSearchInput" placeholder="🎨 Filter by model..." list="modelList" onkeyup="handleModelSearch()" onfocus="this.value=''; handleModelSearch()">
+                <datalist id="modelList">
+                    <option value="__no_model__">__no_model__</option>
+                </datalist>
+            </div>
+            <input type="text" class="search-input" id="searchInput" placeholder="🔍 Search prompts, filenames..." onkeyup="handleSearch()">
+        </div>
+
+        <div class="pagination" id="paginationTop"></div>
+
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+        </div>
+        <div class="gallery" id="gallery"></div>
+
+        <div class="pagination" id="paginationBottom"></div>
+    </div>
+
+    <div class="modal" id="modal" onclick="closeModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2 id="modalTitle">Image Details</h2>
+                <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+            </div>
+            <div class="modal-body" id="modalBody"></div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        let currentPage = 1;
+        let searchQuery = '';
+        let searchTimeout;
+        let currentImages = [];
+        let currentImageIndex = -1;
+
+        async function loadImages(page = 1) {
+            currentPage = page;
+            const loadingEl = document.getElementById('loading');
+
+            loadingEl.classList.add('show');
+
+            try {
+                const modelSearchInput = document.getElementById('modelSearchInput');
+                let selectedModel = modelSearchInput ? modelSearchInput.value.trim() : '';
+
+                // Remove count from model name (e.g., "model_name (42)" -> "model_name")
+                if (selectedModel && selectedModel !== '__no_model__') {
+                    selectedModel = selectedModel.replace(/\s*\(\d+\)$/, '');
+                }
+
+                const params = new URLSearchParams({
+                    page: page,
+                    limit: 100,
+                    sortBy: 'file_created_at',
+                    sortOrder: 'DESC',
+                    search: searchQuery
+                });
+
+                if (selectedModel) {
+                    params.append('model', selectedModel);
+                }
+
+                const startTime = performance.now();
+                const response = await fetch(`/api/images?${params}`);
+                const data = await response.json();
+                const loadTime = performance.now() - startTime;
+
+                console.log(`[Performance] Page loaded in ${loadTime.toFixed(0)}ms`);
+
+                if (data.success) {
+                    currentImages = data.images;
+                    renderGallery(data.images);
+                    renderPagination(data.pagination);
+                    document.getElementById('totalCount').textContent = data.pagination.total;
+                    document.getElementById('pageInfo').textContent =
+                        `Page ${data.pagination.page} of ${data.pagination.totalPages}`;
+
+                    // Scroll to top smoothly
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                } else {
+                    showToast('Error loading images', 'error');
+                }
+            } catch (error) {
+                showToast('Failed to load images: ' + error.message, 'error');
+            } finally {
+                loadingEl.classList.remove('show');
+            }
+        }
+
+        function renderGallery(images) {
+            const gallery = document.getElementById('gallery');
+            gallery.innerHTML = '';
+
+            if (images.length === 0) {
+                gallery.innerHTML = '<div class="loading">No images found</div>';
+                return;
+            }
+
+            images.forEach((img, index) => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.onclick = () => showImageDetail(img.id, index);
+
+                const prompt = img.positive_prompt || 'No prompt';
+                const model = img.model || 'Unknown';
+
+                card.innerHTML = `
+                    <img class="card-image" src="/api/image/${img.id}" alt="${img.filename}" loading="lazy" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22280%22 height=%22280%22%3E%3Crect width=%22280%22 height=%22280%22 fill=%22%231e1e2e%22/%3E%3Ctext x=%2250%%22 y=%2250%%22 fill=%22%23707080%22 text-anchor=%22middle%22 dy=%22.3em%22%3EImage not found%3C/text%3E%3C/svg%3E'">
+                    <div class="card-content">
+                        <div class="card-title">${img.filename}</div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">
+                            Model: ${model}
+                        </div>
+                        <div class="card-prompt">${prompt}</div>
+                    </div>
+                `;
+
+                gallery.appendChild(card);
+            });
+        }
+
+        function renderPagination(pagination) {
+            const { page, totalPages } = pagination;
+
+            // Render to both top and bottom pagination containers
+            ['paginationTop', 'paginationBottom'].forEach(containerId => {
+                const container = document.getElementById(containerId);
+                container.innerHTML = '';
+
+                if (totalPages <= 1) return;
+
+                // First page button
+                if (page > 1) {
+                    const first = document.createElement('button');
+                    first.className = 'page-btn';
+                    first.textContent = '⏮ First';
+                    first.onclick = () => loadImages(1);
+                    container.appendChild(first);
+                }
+
+                // Previous button
+                if (page > 1) {
+                    const prev = document.createElement('button');
+                    prev.className = 'page-btn';
+                    prev.textContent = '← Prev';
+                    prev.onclick = () => loadImages(page - 1);
+                    container.appendChild(prev);
+                }
+
+                // Page numbers
+                const start = Math.max(1, page - 2);
+                const end = Math.min(totalPages, page + 2);
+
+                // Show ellipsis if not showing first page
+                if (start > 1) {
+                    const ellipsis = document.createElement('span');
+                    ellipsis.style.padding = '8px';
+                    ellipsis.style.color = 'var(--text-muted)';
+                    ellipsis.textContent = '...';
+                    container.appendChild(ellipsis);
+                }
+
+                for (let i = start; i <= end; i++) {
+                    const btn = document.createElement('button');
+                    btn.className = 'page-btn' + (i === page ? ' active' : '');
+                    btn.textContent = i;
+                    btn.onclick = () => loadImages(i);
+                    container.appendChild(btn);
+                }
+
+                // Show ellipsis if not showing last page
+                if (end < totalPages) {
+                    const ellipsis = document.createElement('span');
+                    ellipsis.style.padding = '8px';
+                    ellipsis.style.color = 'var(--text-muted)';
+                    ellipsis.textContent = '...';
+                    container.appendChild(ellipsis);
+                }
+
+                // Next button
+                if (page < totalPages) {
+                    const next = document.createElement('button');
+                    next.className = 'page-btn';
+                    next.textContent = 'Next →';
+                    next.onclick = () => loadImages(page + 1);
+                    container.appendChild(next);
+                }
+
+                // Last page button
+                if (page < totalPages) {
+                    const last = document.createElement('button');
+                    last.className = 'page-btn';
+                    last.textContent = 'Last ⏭';
+                    last.onclick = () => loadImages(totalPages);
+                    container.appendChild(last);
+                }
+            });
+        }
+
+        function formatStructuredText(text) {
+            if (!text) return text;
+
+            let trimmed = text.trim();
+
+            // Remove common prefixes like "prompt", "parameters", etc.
+            const prefixMatch = trimmed.match(/^(prompt|parameters|params|metadata|data)(\s*)([{[])/i);
+            if (prefixMatch) {
+                trimmed = trimmed.substring(prefixMatch[1].length + prefixMatch[2].length).trim();
+            }
+
+            // Try to detect and format JSON
+            // Check for JSON patterns: starts with { or [ and contains valid JSON structure
+            if ((trimmed.startsWith('{') || trimmed.startsWith('['))) {
+                // Find the matching closing bracket
+                const openChar = trimmed[0];
+                const closeChar = openChar === '{' ? '}' : ']';
+
+                // Fix common JSON issues: trailing commas before closing brackets
+                let cleaned = trimmed.replace(/,(\s*[}\]])/g, '$1');
+
+                // Try to parse the entire string first
+                try {
+                    const parsed = JSON.parse(cleaned);
+                    return JSON.stringify(parsed, null, 2);
+                } catch (e) {
+                    // If full parse fails, try to find valid JSON substring
+                    let depth = 0;
+                    let jsonEnd = -1;
+
+                    for (let i = 0; i < trimmed.length; i++) {
+                        if (trimmed[i] === openChar || trimmed[i] === (openChar === '{' ? '[' : '{')) {
+                            depth++;
+                        } else if (trimmed[i] === closeChar || trimmed[i] === (closeChar === '}' ? ']' : '}')) {
+                            depth--;
+                            if (depth === 0) {
+                                jsonEnd = i + 1;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (jsonEnd > 0) {
+                        const jsonStr = trimmed.substring(0, jsonEnd);
+                        // Also fix trailing commas in the substring
+                        const cleanedSubstr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
+                        try {
+                            const parsed = JSON.parse(cleanedSubstr);
+                            return JSON.stringify(parsed, null, 2);
+                        } catch (e2) {
+                            // Still not valid JSON, return original
+                        }
+                    }
+                }
+            }
+
+            // Try to detect and format XML
+            if (trimmed.startsWith('<') && trimmed.endsWith('>')) {
+                try {
+                    // Simple XML formatting
+                    let formatted = trimmed
+                        .replace(/></g, '>\n<')
+                        .replace(/(<[^/][^>]*>)([^<]+)/g, '$1\n  $2\n')
+                        .replace(/\n\s*\n/g, '\n');
+
+                    // Add proper indentation
+                    let indent = 0;
+                    const lines = formatted.split('\n');
+                    formatted = lines.map(line => {
+                        const trimLine = line.trim();
+                        if (!trimLine) return '';
+
+                        if (trimLine.startsWith('</')) {
+                            indent = Math.max(0, indent - 1);
+                        }
+
+                        const indented = '  '.repeat(indent) + trimLine;
+
+                        if (trimLine.startsWith('<') && !trimLine.startsWith('</') &&
+                            !trimLine.endsWith('/>') && !trimLine.includes('</')) {
+                            indent++;
+                        }
+
+                        return indented;
+                    }).join('\n');
+
+                    return formatted;
+                } catch (e) {
+                    // XML formatting failed, return original
+                }
+            }
+
+            return text;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function escapeHtmlWithBreaks(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML.replace(/\n/g, '<br>');
+        }
+
+        async function showImageDetail(id, index = -1) {
+            currentImageIndex = index;
+
+            try {
+                const response = await fetch(`/api/images/${id}`);
+                const data = await response.json();
+
+                if (!data.success) {
+                    showToast('Error loading image details', 'error');
+                    return;
+                }
+
+                const img = data.image;
+
+                // Format prompts if they are structured
+                const formattedPositive = formatStructuredText(img.positive_prompt);
+                const formattedNegative = formatStructuredText(img.negative_prompt);
+
+                // Update modal header with action buttons
+                const modalHeader = document.querySelector('.modal-header');
+                modalHeader.innerHTML = `
+                    <h2 id="modalTitle">${escapeHtml(img.filename)}</h2>
+                    <div class="modal-actions">
+                        <button class="icon-btn" onclick="copyPrompt(${img.id})" title="Copy Prompt">📋 Copy Prompt</button>
+                        <button class="icon-btn" onclick="downloadImage(${img.id}, '${escapeHtml(img.filename)}')" title="Download Image">💾 Download</button>
+                        <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+                    </div>
+                `;
+
+                const modalBody = document.getElementById('modalBody');
+                modalBody.innerHTML = `
+                    <div>
+                        <img class="modal-image" src="/api/image/${img.id}" alt="${escapeHtml(img.filename)}">
+                    </div>
+                    <div>
+                        <div class="detail-row">
+                            <div class="detail-label">Filename</div>
+                            <div class="detail-value">${escapeHtml(img.filename)}</div>
+                        </div>
+                        ${img.file_created_at ? `
+                        <div class="detail-row">
+                            <div class="detail-label">File Created</div>
+                            <div class="detail-value">${escapeHtml(img.file_created_at)}</div>
+                        </div>
+                        ` : ''}
+                        ${img.positive_prompt ? `
+                        <div class="detail-row">
+                            <div class="detail-label">Positive Prompt</div>
+                            <div class="detail-value" id="positive-prompt-${img.id}" style="white-space: pre-wrap; font-family: ${formattedPositive !== img.positive_prompt ? 'monospace' : 'inherit'};">${escapeHtml(formattedPositive)}</div>
+                        </div>
+                        ` : ''}
+                        ${img.negative_prompt ? `
+                        <div class="detail-row">
+                            <div class="detail-label">Negative Prompt</div>
+                            <div class="detail-value" id="negative-prompt-${img.id}" style="white-space: pre-wrap; font-family: ${formattedNegative !== img.negative_prompt ? 'monospace' : 'inherit'};">${escapeHtml(formattedNegative)}</div>
+                        </div>
+                        ` : ''}
+                        ${img.model && img.model !== '?' ? `
+                        <div class="detail-row">
+                            <div class="detail-label">Model</div>
+                            <div class="detail-value">${escapeHtml(img.model)}</div>
+                        </div>
+                        ` : ''}
+                        <div class="detail-row">
+                            <div class="detail-label">Parameters</div>
+                            <div class="detail-value">
+                                Steps: ${escapeHtml(img.steps || '?')} |
+                                CFG: ${escapeHtml(img.cfg || '?')} |
+                                Sampler: ${escapeHtml(img.sampler || '?')} |
+                                Seed: ${escapeHtml(img.seed || '?')} |
+                                Size: ${escapeHtml(img.size || '?')}
+                            </div>
+                        </div>
+                        ${img.metadata_text ? `
+                        <div class="detail-row">
+                            <div class="detail-label">Raw Metadata</div>
+                            <div class="detail-value" style="max-height: 200px; overflow-y: auto; white-space: pre-wrap; font-size: 11px;">${escapeHtml(img.metadata_text)}</div>
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+
+                // Store image data for button functions
+                window.currentImageData = img;
+
+                document.getElementById('modal').classList.add('active');
+            } catch (error) {
+                showToast('Failed to load details: ' + error.message, 'error');
+            }
+        }
+
+        function closeModal(event) {
+            if (!event || event.target.id === 'modal') {
+                document.getElementById('modal').classList.remove('active');
+                currentImageIndex = -1;
+            }
+        }
+
+        function navigateImage(direction) {
+            if (currentImageIndex === -1 || currentImages.length === 0) return;
+
+            let newIndex = currentImageIndex + direction;
+
+            if (newIndex < 0) newIndex = 0;
+            if (newIndex >= currentImages.length) newIndex = currentImages.length - 1;
+
+            if (newIndex !== currentImageIndex && currentImages[newIndex]) {
+                showImageDetail(currentImages[newIndex].id, newIndex);
+            }
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            const modal = document.getElementById('modal');
+            if (!modal.classList.contains('active')) return;
+
+            switch(e.key) {
+                case 'Escape':
+                    closeModal();
+                    break;
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    navigateImage(-1);
+                    break;
+                case 'ArrowRight':
+                    e.preventDefault();
+                    navigateImage(1);
+                    break;
+            }
+        });
+
+        function handleSearch() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                searchQuery = document.getElementById('searchInput').value;
+                loadImages(1);
+            }, 500);
+        }
+
+        // Global variable to store all models
+        let allModels = [];
+        let modelSearchTimeout;
+
+        // Load models from API
+        async function loadModels() {
+            try {
+                const response = await fetch('/api/models');
+                const data = await response.json();
+
+                if (data.success) {
+                    allModels = data.models;
+                    populateModelDatalist(allModels);
+                }
+            } catch (error) {
+                console.error('Failed to load models:', error);
+            }
+        }
+
+        // Populate the datalist with all models
+        function populateModelDatalist(models) {
+            const datalist = document.getElementById('modelList');
+
+            // Clear existing options except the first two
+            while (datalist.options.length > 2) {
+                datalist.remove(2);
+            }
+
+            // Add all models with count in the value
+            models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = `${model.model} (${model.count})`;
+                datalist.appendChild(option);
+            });
+        }
+
+        // Handle model search input with debounce
+        function handleModelSearch() {
+            clearTimeout(modelSearchTimeout);
+            modelSearchTimeout = setTimeout(() => {
+                loadImages(1);
+            }, 500);
+        }
+
+        async function showScanModal() {
+            const modal = document.getElementById('modal');
+            document.getElementById('modalTitle').textContent = 'Scan Server Folder';
+
+            // Get current folder path from server
+            let currentFolder = '/home/knishika/AI/ComfyUI/output';
+            try {
+                const response = await fetch('/api/info');
+                const data = await response.json();
+                if (data.imageFolder) {
+                    currentFolder = data.imageFolder;
+                }
+            } catch (error) {
+                console.warn('Could not load current folder:', error);
+            }
+
+            document.getElementById('modalBody').innerHTML = `
+                <div class="scan-modal">
+                    <div class="form-group">
+                        <label class="form-label">Image Folder Path</label>
+                        <input type="text" class="form-input" id="folderPath" value="${currentFolder}" placeholder="/home/knishika/AI/ComfyUI/output">
+                        <div style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">
+                            ⚠️ Warning: Changing the folder will clear all existing data and rescan from the new folder.
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 12px;">
+                        <button class="btn" onclick="startScan()" style="flex: 1;">Start Scan</button>
+                        <button class="btn" onclick="resetDatabase()" style="flex: 1; background: var(--error);">🗑️ Reset DB</button>
+                    </div>
+                </div>
+            `;
+            modal.classList.add('active');
+        }
+
+        async function startScan() {
+            const folderPath = document.getElementById('folderPath').value.trim();
+            if (!folderPath) {
+                showToast('Please enter a folder path', 'error');
+                return;
+            }
+
+            closeModal();
+            showToast('Scanning folder... This may take a while', 'success');
+
+            try {
+                const response = await fetch('/api/scan', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ imageFolder: folderPath })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showToast(`Scan complete! ${result.addedCount} images added, ${result.skippedCount} skipped`, 'success');
+                    loadImages(1);
+                } else {
+                    showToast('Scan failed: ' + result.error, 'error');
+                }
+            } catch (error) {
+                showToast('Scan failed: ' + error.message, 'error');
+            }
+        }
+
+        async function resetDatabase() {
+            const confirmed = confirm(
+                '⚠️ WARNING: This will delete ALL images from the database!\n\n' +
+                'This action cannot be undone.\n\n' +
+                'Are you sure you want to reset the database?'
+            );
+
+            if (!confirmed) {
+                return;
+            }
+
+            // Second confirmation
+            const doubleConfirmed = confirm(
+                'Are you ABSOLUTELY sure?\n\n' +
+                'All image metadata will be permanently deleted.'
+            );
+
+            if (!doubleConfirmed) {
+                return;
+            }
+
+            closeModal();
+            showToast('Resetting database...', 'success');
+
+            try {
+                const response = await fetch('/api/reset', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showToast('Database reset successfully!', 'success');
+
+                    // Reload models list and images
+                    await loadModels();
+                    await loadImages(1);
+                } else {
+                    showToast('Reset failed: ' + result.error, 'error');
+                }
+            } catch (error) {
+                console.error('Reset error:', error);
+                showToast('Reset failed: ' + error.message, 'error');
+            }
+        }
+
+        async function updateImages() {
+            showToast('Updating new images... This may take a while', 'success');
+
+            try {
+                const response = await fetch('/api/update', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showToast(`Update complete! ${result.addedCount} new images added, ${result.skippedCount} existing images skipped`, 'success');
+                    loadImages(1);
+                } else {
+                    showToast('Update failed: ' + result.error, 'error');
+                }
+            } catch (error) {
+                showToast('Update failed: ' + error.message, 'error');
+            }
+        }
+
+        async function copyPrompt(id) {
+            if (!window.currentImageData) {
+                showToast('No image data available', 'error');
+                return;
+            }
+
+            const img = window.currentImageData;
+            // Only copy positive prompt
+            let promptText = img.positive_prompt || '';
+
+            try {
+                // Try modern clipboard API first
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(promptText);
+                    showToast('Prompt copied to clipboard!', 'success');
+                } else {
+                    // Fallback for HTTP (non-HTTPS) contexts
+                    const textArea = document.createElement('textarea');
+                    textArea.value = promptText;
+                    textArea.style.position = 'fixed';
+                    textArea.style.left = '-999999px';
+                    textArea.style.top = '-999999px';
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+
+                    try {
+                        const successful = document.execCommand('copy');
+                        if (successful) {
+                            showToast('Prompt copied to clipboard!', 'success');
+                        } else {
+                            showToast('Failed to copy: Browser does not support copy', 'error');
+                        }
+                    } catch (err) {
+                        showToast('Failed to copy: ' + err.message, 'error');
+                    } finally {
+                        document.body.removeChild(textArea);
+                    }
+                }
+            } catch (error) {
+                showToast('Failed to copy: ' + error.message, 'error');
+            }
+        }
+
+        async function downloadImage(id, filename) {
+            try {
+                const response = await fetch(`/api/image/${id}`);
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                showToast('Image downloaded!', 'success');
+            } catch (error) {
+                showToast('Failed to download: ' + error.message, 'error');
+            }
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type} show`;
+            setTimeout(() => {
+                toast.className = 'toast';
+            }, 3000);
+        }
+
+        // Initialize
+        async function initialize() {
+            await loadModels();
+            loadImages(1);
+        }
+
+        initialize();
+    </script>
+</body>
+</html>
