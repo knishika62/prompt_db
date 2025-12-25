@@ -832,6 +832,89 @@ app.post('/api/update', async (req, res) => {
   }
 });
 
+// Delete selected images
+app.post('/api/images/delete', async (req, res) => {
+  try {
+    const { imageIds } = req.body;
+
+    if (!imageIds || !Array.isArray(imageIds) || imageIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'No image IDs provided' });
+    }
+
+    console.log(`[API] Deleting ${imageIds.length} images`);
+
+    // First, collect all file paths
+    const imagesToDelete = [];
+    for (const imageId of imageIds) {
+      const imageInfo = await new Promise((resolve, reject) => {
+        db.get('SELECT id, file_path FROM images WHERE id = ?', [imageId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+      if (imageInfo) {
+        imagesToDelete.push(imageInfo);
+      }
+    }
+
+    // Delete files first (before DB transaction)
+    let fileDeletedCount = 0;
+    let fileDeleteErrors = [];
+
+    for (const image of imagesToDelete) {
+      if (image.file_path) {
+        try {
+          await fs.unlink(image.file_path);
+          fileDeletedCount++;
+          console.log(`[DELETE] File deleted: ${image.file_path}`);
+        } catch (fileErr) {
+          console.warn(`[DELETE WARNING] Could not delete file ${image.file_path}:`, fileErr.message);
+          fileDeleteErrors.push({ id: image.id, path: image.file_path, error: fileErr.message });
+        }
+      }
+    }
+
+    // Then delete from database in a single operation
+    let deletedCount = 0;
+    if (imagesToDelete.length > 0) {
+      const placeholders = imagesToDelete.map(() => '?').join(',');
+      const ids = imagesToDelete.map(img => img.id);
+
+      await new Promise((resolve, reject) => {
+        db.run(`DELETE FROM images WHERE id IN (${placeholders})`, ids, function(err) {
+          if (err) {
+            console.error(`[DELETE ERROR] Failed to delete images from DB:`, err);
+            reject(err);
+          } else {
+            deletedCount = this.changes;
+            resolve();
+          }
+        });
+      });
+    }
+
+    console.log(`[DELETE] Successfully deleted ${deletedCount} DB records and ${fileDeletedCount} files`);
+
+    const response = {
+      success: true,
+      deletedCount,
+      fileDeletedCount,
+      message: `${deletedCount} image${deletedCount !== 1 ? 's' : ''} deleted from database, ${fileDeletedCount} file${fileDeletedCount !== 1 ? 's' : ''} deleted from disk`
+    };
+
+    if (fileDeleteErrors.length > 0) {
+      response.fileDeleteErrors = fileDeleteErrors;
+      response.warning = `${fileDeleteErrors.length} file${fileDeleteErrors.length !== 1 ? 's' : ''} could not be deleted from disk`;
+    }
+
+    res.json(response);
+
+  } catch (error) {
+    console.error('[API ERROR] Delete failed:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Reset database - delete all images and tags
 app.post('/api/reset', async (req, res) => {
   try {

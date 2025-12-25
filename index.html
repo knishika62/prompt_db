@@ -159,10 +159,32 @@
             box-shadow: var(--shadow-md);
             transition: all 0.3s;
             cursor: pointer;
+            position: relative;
         }
 
-        .card:hover {
-            transform: translateY(-4px);
+
+        .card-checkbox {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            z-index: 10;
+            accent-color: var(--accent);
+        }
+
+        .card.selected {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px var(--accent);
+        }
+
+        .btn-danger {
+            background: var(--error);
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
         }
 
         .card-image {
@@ -427,6 +449,10 @@
     <div class="header">
         <h1>🎨 Prompt DB Server</h1>
         <div class="header-actions">
+            <span id="selectedCount" style="color: var(--text-secondary); font-size: 14px; margin-right: 8px;"></span>
+            <button class="btn btn-danger" onclick="deleteSelected()" id="deleteBtn" style="display: none;">🗑️ Delete</button>
+            <button class="btn btn-secondary" onclick="toggleSelectAll()">☑️ Select All</button>
+            <div style="width: 20px;"></div>
             <button class="btn btn-secondary" onclick="updateImages()">🔄 Update</button>
             <button class="btn" onclick="showScanModal()">📁 Scan Folder</button>
         </div>
@@ -476,6 +502,7 @@
         let searchTimeout;
         let currentImages = [];
         let currentImageIndex = -1;
+        let selectedImages = new Set();
 
         async function loadImages(page = 1) {
             currentPage = page;
@@ -543,12 +570,21 @@
             images.forEach((img, index) => {
                 const card = document.createElement('div');
                 card.className = 'card';
-                card.onclick = () => showImageDetail(img.id, index);
+                card.dataset.imageId = img.id;
+                if (selectedImages.has(img.id)) {
+                    card.classList.add('selected');
+                }
+                card.onclick = (e) => {
+                    if (e.target.type !== 'checkbox') {
+                        showImageDetail(img.id, index);
+                    }
+                };
 
                 const prompt = img.positive_prompt || 'No prompt';
                 const model = img.model || 'Unknown';
 
                 card.innerHTML = `
+                    <input type="checkbox" class="card-checkbox" ${selectedImages.has(img.id) ? 'checked' : ''} onclick="event.stopPropagation(); toggleImageSelection(${img.id})">
                     <img class="card-image" src="/api/image/${img.id}" alt="${img.filename}" loading="lazy" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22280%22 height=%22280%22%3E%3Crect width=%22280%22 height=%22280%22 fill=%22%231e1e2e%22/%3E%3Ctext x=%2250%%22 y=%2250%%22 fill=%22%23707080%22 text-anchor=%22middle%22 dy=%22.3em%22%3EImage not found%3C/text%3E%3C/svg%3E'">
                     <div class="card-content">
                         <div class="card-title">${img.filename}</div>
@@ -561,6 +597,7 @@
 
                 gallery.appendChild(card);
             });
+            updateSelectionUI();
         }
 
         function renderPagination(pagination) {
@@ -1133,6 +1170,108 @@
             setTimeout(() => {
                 toast.className = 'toast';
             }, 3000);
+        }
+
+        // Selection management functions
+        function toggleImageSelection(imageId) {
+            if (selectedImages.has(imageId)) {
+                selectedImages.delete(imageId);
+            } else {
+                selectedImages.add(imageId);
+            }
+            updateSelectionUI();
+        }
+
+        function toggleSelectAll() {
+            const allSelected = currentImages.every(img => selectedImages.has(img.id));
+
+            if (allSelected) {
+                // Deselect all current page images
+                currentImages.forEach(img => selectedImages.delete(img.id));
+            } else {
+                // Select all current page images
+                currentImages.forEach(img => selectedImages.add(img.id));
+            }
+
+            // Re-render gallery to update checkboxes
+            renderGallery(currentImages);
+        }
+
+        function updateSelectionUI() {
+            const count = selectedImages.size;
+            const countEl = document.getElementById('selectedCount');
+            const deleteBtn = document.getElementById('deleteBtn');
+
+            if (count > 0) {
+                countEl.textContent = `${count} image${count !== 1 ? 's' : ''} selected`;
+                deleteBtn.style.display = 'block';
+            } else {
+                countEl.textContent = '';
+                deleteBtn.style.display = 'none';
+            }
+
+            // Update card selection state
+            document.querySelectorAll('.card').forEach(card => {
+                const imageId = parseInt(card.dataset.imageId);
+                const checkbox = card.querySelector('.card-checkbox');
+
+                if (selectedImages.has(imageId)) {
+                    card.classList.add('selected');
+                    if (checkbox) checkbox.checked = true;
+                } else {
+                    card.classList.remove('selected');
+                    if (checkbox) checkbox.checked = false;
+                }
+            });
+        }
+
+        async function deleteSelected() {
+            if (selectedImages.size === 0) {
+                showToast('No images selected', 'error');
+                return;
+            }
+
+            const confirmed = confirm(
+                `Are you sure you want to delete ${selectedImages.size} image${selectedImages.size !== 1 ? 's' : ''}?\n\n` +
+                'This action cannot be undone.'
+            );
+
+            if (!confirmed) {
+                return;
+            }
+
+            showToast('Deleting images...', 'success');
+
+            try {
+                const imageIds = Array.from(selectedImages);
+                const response = await fetch('/api/images/delete', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ imageIds })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    const message = result.warning
+                        ? `Deleted ${result.deletedCount} from DB, ${result.fileDeletedCount} files. Warning: ${result.warning}`
+                        : `Successfully deleted ${result.deletedCount} image${result.deletedCount !== 1 ? 's' : ''}!`;
+
+                    showToast(message, result.warning ? 'error' : 'success');
+                    selectedImages.clear();
+
+                    // Small delay to ensure server has completed the operation
+                    await new Promise(resolve => setTimeout(resolve, 300));
+
+                    // Reload images only (models will be refreshed automatically if needed)
+                    await loadImages(currentPage);
+                } else {
+                    showToast('Delete failed: ' + result.error, 'error');
+                }
+            } catch (error) {
+                console.error('Delete error:', error);
+                showToast('Delete failed: ' + error.message, 'error');
+            }
         }
 
         // Initialize
